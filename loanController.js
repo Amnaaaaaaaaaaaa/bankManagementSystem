@@ -1,90 +1,106 @@
-const Loan = require('../models/Loan'); // Assuming you have a Loan model
-const User = require('../models/User'); // Assuming you have a User model
+//loanController.js
+const Loan = require('../models/loanModel');
+const Transaction = require('../models/transactionModel');
+const asyncHandler = require('express-async-handler');
 
-// Create a new loan
-exports.createLoan = async (req, res) => {
-    try {
-        const { userId, amount, interestRate, duration, startDate } = req.body;
+// @desc    Create a new loan
+// @route   POST /api/loans
+// @access  Admin/User
+exports.createLoan = asyncHandler(async (req, res) => {
+  const { borrowerName, amount, interestRate, termInMonths } = req.body;
 
-        // Validate if user exists
-        const user = await User.findById(userId);
-        if (!user) {
-            return res.status(404).json({ message: "User not found!" });
-        }
+  const loan = new Loan({
+    borrowerName,
+    amount,
+    interestRate,
+    termInMonths
+  });
 
-        // Create new loan
-        const loan = new Loan({
-            userId,
-            amount,
-            interestRate,
-            duration,
-            startDate,
-            status: 'Pending', // Assuming the default status is 'Pending'
-        });
+  await loan.save();
 
-        await loan.save();
+  res.status(201).json({
+    success: true,
+    message: 'Loan application submitted successfully',
+    loan
+  });
+});
 
-        res.status(201).json({ message: 'Loan created successfully', loan });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Error creating loan' });
+// @desc    Get all loans
+// @route   GET /api/loans
+// @access  Admin
+exports.getAllLoans = asyncHandler(async (req, res) => {
+  const { 
+    page = 1, 
+    limit = 10, 
+    status, 
+    sortBy = 'createdAt', 
+    sortOrder = 'desc' 
+  } = req.query;
+
+  const query = status ? { status } : {};
+  const sortOptions = { [sortBy]: sortOrder === 'desc' ? -1 : 1 };
+
+  const loans = await Loan.find(query)
+    .sort(sortOptions)
+    .skip((page - 1) * limit)
+    .limit(Number(limit));
+
+  const total = await Loan.countDocuments(query);
+
+  res.json({
+    success: true,
+    loans,
+    pagination: {
+      currentPage: page,
+      totalPages: Math.ceil(total / limit),
+      totalLoans: total
     }
-};
+  });
+});
 
-// Get loan details by ID
-exports.getLoan = async (req, res) => {
-    try {
-        const loanId = req.params.loanId;
+// @desc    Get loan details with transactions
+// @route   GET /api/loans/:loanId
+// @access  Admin/User
+exports.getLoanDetails = asyncHandler(async (req, res) => {
+  const { loanId } = req.params;
 
-        // Find loan by ID
-        const loan = await Loan.findById(loanId).populate('userId'); // Assuming loan has a reference to User
+  const loan = await Loan.findById(loanId);
+  if (!loan) {
+    return res.status(404).json({ 
+      success: false, 
+      message: 'Loan not found' 
+    });
+  }
 
-        if (!loan) {
-            return res.status(404).json({ message: 'Loan not found' });
-        }
+  const transactions = await Transaction.find({ loanId })
+    .sort({ transactionDate: -1 });
 
-        res.status(200).json({ loan });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Error retrieving loan details' });
-    }
-};
+  res.json({
+    success: true,
+    loan,
+    transactions
+  });
+});
 
-// Update loan status or details
-exports.updateLoan = async (req, res) => {
-    try {
-        const loanId = req.params.loanId;
-        const { status, amount, interestRate, duration } = req.body;
+// @desc    Update loan status
+// @route   PATCH /api/loans/:loanId/status
+// @access  Admin
+exports.updateLoanStatus = asyncHandler(async (req, res) => {
+  const { loanId } = req.params;
+  const { status, rejectionReason } = req.body;
 
-        // Find loan and update
-        const loan = await Loan.findByIdAndUpdate(loanId, { status, amount, interestRate, duration }, { new: true });
+  const updateData = { status };
+  if (status === 'REJECTED') updateData.rejectionReason = rejectionReason;
 
-        if (!loan) {
-            return res.status(404).json({ message: 'Loan not found' });
-        }
+  const loan = await Loan.findByIdAndUpdate(loanId, updateData, { new: true });
 
-        res.status(200).json({ message: 'Loan updated successfully', loan });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Error updating loan' });
-    }
-};
+  if (!loan) {
+    return res.status(404).json({ success: false, message: 'Loan not found' });
+  }
 
-// Delete a loan
-exports.deleteLoan = async (req, res) => {
-    try {
-        const loanId = req.params.loanId;
-
-        // Find and delete loan
-        const loan = await Loan.findByIdAndDelete(loanId);
-
-        if (!loan) {
-            return res.status(404).json({ message: 'Loan not found' });
-        }
-
-        res.status(200).json({ message: 'Loan deleted successfully' });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Error deleting loan' });
-    }
-};
+  res.json({
+    success: true,
+    message: `Loan status updated to ${status}`,
+    loan,
+  });
+});

@@ -1,88 +1,96 @@
-const Transaction = require('../models/Transaction'); // Assuming you have a Transaction model
-const Loan = require('../models/Loan'); // Assuming you have a Loan model
+//transactionController.js
+const Loan = require('../models/loanModel');
+const Transaction = require('../models/transactionModel');
+const asyncHandler = require('express-async-handler');
 
-// Create a new transaction
-exports.createTransaction = async (req, res) => {
-    try {
-        const { loanId, transactionAmount, transactionType, date } = req.body;
+// @desc    Record a transaction (payment or disbursement)
+// @route   POST /api/transactions
+// @access  Admin
+exports.createTransaction = asyncHandler(async (req, res) => {
+  const { loanId, amount, type, description } = req.body;
 
-        // Find loan by ID
-        const loan = await Loan.findById(loanId);
-        if (!loan) {
-            return res.status(404).json({ message: "Loan not found!" });
-        }
+  // Find the loan
+  const loan = await Loan.findById(loanId);
+  if (!loan) {
+    return res.status(404).json({ 
+      success: false, 
+      message: 'Loan not found' 
+    });
+  }
 
-        // Create new transaction
-        const transaction = new Transaction({
-            loanId,
-            transactionAmount,
-            transactionType, // Can be 'credit' or 'debit'
-            date,
-        });
-
-        await transaction.save();
-
-        res.status(201).json({ message: 'Transaction created successfully', transaction });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Error creating transaction' });
+  // Validate transaction based on type
+  if (type === 'PAYMENT') {
+    if (amount > loan.remainingBalance) {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment amount exceeds remaining balance'
+      });
     }
-};
-
-// Get transaction details by ID
-exports.getTransaction = async (req, res) => {
-    try {
-        const transactionId = req.params.transactionId;
-
-        // Find transaction by ID
-        const transaction = await Transaction.findById(transactionId).populate('loanId'); // Assuming transaction has a reference to Loan
-
-        if (!transaction) {
-            return res.status(404).json({ message: 'Transaction not found' });
-        }
-
-        res.status(200).json({ transaction });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Error retrieving transaction details' });
+  } else if (type === 'DISBURSEMENT') {
+    if (loan.status !== 'APPROVED') {
+      return res.status(400).json({
+        success: false,
+        message: 'Loan must be approved before disbursement'
+      });
     }
-};
+  }
 
-// Update transaction details
-exports.updateTransaction = async (req, res) => {
-    try {
-        const transactionId = req.params.transactionId;
-        const { transactionAmount, transactionType, date } = req.body;
+  // Create transaction
+  const transaction = new Transaction({
+    loanId,
+    amount,
+    type,
+    description,
+    status: 'COMPLETED'
+  });
 
-        // Find transaction and update
-        const transaction = await Transaction.findByIdAndUpdate(transactionId, { transactionAmount, transactionType, date }, { new: true });
+  await transaction.save();
 
-        if (!transaction) {
-            return res.status(404).json({ message: 'Transaction not found' });
-        }
+  // Update loan based on transaction type
+  if (type === 'PAYMENT') {
+    await loan.updateTotalAmountPaid(amount);
+  } else if (type === 'DISBURSEMENT') {
+    loan.status = 'ACTIVE';
+    await loan.save();
+  }
 
-        res.status(200).json({ message: 'Transaction updated successfully', transaction });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Error updating transaction' });
+  res.status(201).json({
+    success: true,
+    message: 'Transaction recorded successfully',
+    transaction
+  });
+});
+
+// @desc    Get transactions for a specific loan
+// @route   GET /api/loans/:loanId/transactions
+// @access  Admin/User
+exports.getLoanTransactions = asyncHandler(async (req, res) => {
+  const { loanId } = req.params;
+  const { 
+    page = 1, 
+    limit = 10, 
+    type,
+    sortBy = 'transactionDate', 
+    sortOrder = 'desc' 
+  } = req.query;
+
+  const query = { loanId, ...(type && { type }) };
+  const sortOptions = { [sortBy]: sortOrder === 'desc' ? -1 : 1 };
+
+  const transactions = await Transaction.find(query)
+    .sort(sortOptions)
+    .skip((page - 1) * limit)
+    .limit(Number(limit));
+
+  const total = await Transaction.countDocuments(query);
+
+  res.json({
+    success: true,
+    transactions,
+    pagination: {
+      currentPage: page,
+      totalPages: Math.ceil(total / limit),
+      totalTransactions: total
     }
-};
-
-// Delete a transaction
-exports.deleteTransaction = async (req, res) => {
-    try {
-        const transactionId = req.params.transactionId;
-
-        // Find and delete transaction
-        const transaction = await Transaction.findByIdAndDelete(transactionId);
-
-        if (!transaction) {
-            return res.status(404).json({ message: 'Transaction not found' });
-        }
-
-        res.status(200).json({ message: 'Transaction deleted successfully' });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Error deleting transaction' });
-    }
-};
+  });
+});
