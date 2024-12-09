@@ -1,0 +1,39 @@
+/* src/pages/Home.css */
+
+.home {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: #041c3c;
+    color: #bcf404;
+    text-align: center;
+  }
+  
+  .home h1 {
+    font-size: 3rem;
+    margin-bottom: 2rem;
+  }
+  
+  .home p {
+    margin: 0;
+  }
+  
+  .button {
+    display: inline-block;
+    margin: 0 10px;
+    padding: 10px 20px;
+    text-decoration: none;
+    color: #fff;
+    background-color: #5373fb;
+    border-radius: 5px;
+    font-size: 1rem;
+    font-weight: bold;
+    transition: background-color 0.3s ease;
+  }
+  
+  .button:hover {
+    background-color: #fc2424;
+  }
+  

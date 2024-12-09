@@ -1,0 +1,41 @@
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  height: 100vh;
+  background-color: #041c3c;
+  color: #bcf404;
+  text-align: center;
+  padding: 20px;
+}
+
+nav {
+  margin-bottom: 40px;
+  display: flex;
+  gap: 20px;
+}
+
+nav a {
+  background-color: #5373fb;
+  color: #fff;
+  text-decoration: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  font-size: 1rem;
+  transition: background-color 0.3s ease;
+}
+
+nav a:hover {
+  background-color: #fc2424;
+}
+
+.dashboard-content {
+  background-color: #34343c;
+  padding: 2rem;
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  width: 100%;
+  max-width: 800px;
+  color: #fff;
+}
